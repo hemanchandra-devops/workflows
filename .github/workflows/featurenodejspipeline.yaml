@@ -43,7 +43,7 @@ jobs:
         with:
           context: 'NPM Install'
           state: ${{ steps.npm_install.outcome == 'success' && 'success' || 'failure' }}
-          description: ${{ steps.npm_install.outcome == 'success' && 'NPM install succeeded!' || 'NPM install failed.' }}
+          description: ${{ steps.npm_install.outcome == 'success' && 'success' || 'failure' }}
 
       - name: unit tests
         run: echo "unit tests"
