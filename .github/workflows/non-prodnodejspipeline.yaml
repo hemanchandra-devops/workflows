@@ -29,7 +29,7 @@ jobs:
       
       - name: Check Required Checks
         env:
-          GH_TOKEN: ${{ secrets.TOKEN }}v
+          TOKEN: ${{ secrets.TOKEN }}v
         run: |
           CHECKS=(
             "DEV DEPLOY"
