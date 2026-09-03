@@ -1,0 +1,197 @@
+name: devnodejspipeline
+on:
+  workflow_call:
+    inputs:
+      project:
+        required: true
+        type: string
+      component:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+env:
+  ACCID: "634758830486"
+jobs:
+  featurenodejspipeline:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: list files
+        run: ls -l 
+
+      - name: Show workflow inputs
+        run: |
+          echo "Project: ${{ inputs.project }}"
+
+      - name: Set appversion
+        run: |
+          APPVERSION="${GITHUB_SHA::7}"
+          echo "APPVERSION=$APPVERSION" >> "$GITHUB_ENV"
+          echo "App Version: $APPVERSION"
+
+      - name: install dependencies
+        id: npm_install
+        run: npm install
+
+      - name: Update Commit Status
+        if: always() && steps.npm_install.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'NPM Install'
+          state: ${{ steps.npm_install.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.npm_install.outcome == 'success' && 'success' || 'failure' }}
+
+      - name: unit tests
+        id: unit_test
+        run: echo "unit tests"
+
+      - name: Update Commit Status
+        if: always() && steps.unit_test.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'Unit Test'
+          state: ${{ steps.unit_test.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.unit_test.outcome == 'success' && 'success' || 'failure' }}
+
+      - name: Check Dependabot Alerts
+        id: dependabot
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+          API_URL: "https://api.github.com/repos/hemanchandra-devops/catalogue-ci/dependabot/alerts?state=open&per_page=100"
+        run: |
+          set -e
+
+          echo "Checking Dependabot alerts..."
+
+          HTTP_STATUS=$(curl -sS \
+            -o dependabot-alerts.json \
+            -w "%{http_code}" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${API_URL}")
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "❌ Failed to retrieve Dependabot alerts."
+            echo "GitHub API returned HTTP status: $HTTP_STATUS"
+            cat dependabot-alerts.json
+            exit 1
+          fi
+
+          echo "Dependabot API response:"
+          jq '.' dependabot-alerts.json
+
+          COUNT=$(jq '
+            map(
+              select(
+                .state == "open" and
+                (
+                  .security_advisory.severity == "high" or
+                  .security_advisory.severity == "critical"
+                )
+              )
+            ) | length
+          ' dependabot-alerts.json)
+
+          echo "Open High/Critical Dependabot alerts: ${COUNT}"
+
+          if [ "$COUNT" -gt 0 ]; then
+            echo "❌ Pipeline FAILED"
+            echo "Open High/Critical Dependabot vulnerabilities found."
+            exit 1
+          else
+            echo "✅ No Open High/Critical Dependabot alerts."
+            echo "Continuing pipeline..."
+          fi
+
+      - name: Update Commit Status
+        if: always() && steps.dependabot.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'Dependabot Alerts'
+          state: ${{ steps.dependabot.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.dependabot.outcome == 'success' && 'success' || 'failure' }}
+
+      - name: image build
+        id: image_build
+        run: docker build -t ${ACCID}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:$APPVERSION .
+
+      - name: Update Commit Status
+        if: always() && steps.image_build.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'Dependabot Alerts'
+          state: ${{ steps.image_build.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.image_build.outcome == 'success' && 'success' || 'failure' }}
+
+      - name: Trivy Scan
+        id: trivy_scan
+        run: |
+          IMAGE="${ACCID}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${APPVERSION}"
+
+          echo "Scanning image:"
+          echo "$IMAGE"
+
+          trivy image \
+            --scanners vuln \
+            --vuln-type os \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            "$IMAGE"
+
+      - name: Update Commit Status
+        if: always() && steps.trivy_scan.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'Trivy Scan'
+          state: ${{ steps.trivy_scan.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.trivy_scan.outcome == 'success' && 'success' || 'failure' }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      
+      - name: push image
+        id: push_image
+        run: |
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${ACCID}.dkr.ecr.us-east-1.amazonaws.com
+          docker push ${ACCID}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:$APPVERSION
+
+      - name: Update Commit Status
+        if: always() && steps.push_image.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'Push Image'
+          state: ${{ steps.push_image.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.push_image.outcome == 'success' && 'success' || 'failure' }}
+
+
+      - name: Authenticate to EKS
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name ${{ inputs.project }}-${{ inputs.environment }}
+          kubectl get nodes
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          repository: hemanchandra-devops/catalogue-deploy
+
+      - name: Deploy to EKS
+        id: deploy
+        run: |
+          helm upgrade ${{ inputs.component }} . --install -f values.yaml -n ${{ inputs.project }} --atomic --timeout 15m --set deployment.version=$APPVERSION
+
+      - name: Update Commit Status
+        if: always() && steps.deploy.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'DEV DEPOY'
+          state: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
