@@ -94,7 +94,7 @@ jobs:
 
       - name: Trivy Scan
         run: |
-          IMAGE="${ACCID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${APPVERSION}"
+          IMAGE="${ACCID}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${APPVERSION}"
 
           echo "Scanning image:"
           echo "$IMAGE"
