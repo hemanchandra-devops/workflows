@@ -43,32 +43,63 @@ jobs:
             "Build Image"
           )
 
-          API_URL="https://api.github.com/repos/${{ github.repository }}/commits/${{ inputs.version }}/check-runs"
+          SHA="${{ inputs.version }}"
+          API_BASE="https://api.github.com/repos/${{ github.repository }}"
 
-          RESPONSE=$(curl -fsSL \
+          echo "Checking commit: $SHA"
+
+          CHECK_RUNS=$(curl -fsSL \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "$API_URL")
+            "$API_BASE/commits/$SHA/check-runs")
+
+          COMMIT_STATUS=$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$API_BASE/commits/$SHA/status")
 
           for CHECK in "${CHECKS[@]}"; do
             echo "Checking: $CHECK"
 
-            STATUS=$(echo "$RESPONSE" | jq -r \
+            # Check Runs
+            CHECK_CONCLUSION=$(echo "$CHECK_RUNS" | jq -r \
               --arg CHECK "$CHECK" \
               '[.check_runs[] | select(.name == $CHECK) | .conclusion] | last // empty')
 
-            if [ -z "$STATUS" ]; then
-              echo "❌ $CHECK not found"
-              exit 1
+            # Commit Statuses
+            STATUS_STATE=$(echo "$COMMIT_STATUS" | jq -r \
+              --arg CHECK "$CHECK" \
+              '[.statuses[] | select(.context == $CHECK) | .state] | last // empty')
+
+            if [ -n "$CHECK_CONCLUSION" ]; then
+              echo "Found Check Run: $CHECK -> $CHECK_CONCLUSION"
+
+              if [ "$CHECK_CONCLUSION" != "success" ]; then
+                echo "❌ $CHECK failed. Conclusion: $CHECK_CONCLUSION"
+                exit 1
+              fi
+
+              echo "✅ $CHECK passed"
+              continue
             fi
 
-            if [ "$STATUS" != "success" ]; then
-              echo "❌ $CHECK failed. Status: $STATUS"
-              exit 1
+            if [ -n "$STATUS_STATE" ]; then
+              echo "Found Commit Status: $CHECK -> $STATUS_STATE"
+
+              if [ "$STATUS_STATE" != "success" ]; then
+                echo "❌ $CHECK failed. State: $STATUS_STATE"
+                exit 1
+              fi
+
+              echo "✅ $CHECK passed"
+              continue
             fi
 
-            echo "✅ $CHECK passed"
+            echo "❌ $CHECK not found"
+            exit 1
           done
 
-          echo "✅ All required checks passed."
+          echo "✅ All required checks passed"
+
