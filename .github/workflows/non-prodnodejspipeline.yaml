@@ -29,8 +29,11 @@ jobs:
       
       - name: Check Required Checks
         env:
-          TOKEN: ${{ secrets.TOKEN }}v
+          GH_TOKEN: ${{ secrets.TOKEN }}
+        shell: bash
         run: |
+          set -euo pipefail
+
           CHECKS=(
             "DEV DEPLOY"
             "Dependabot Alerts"
@@ -40,20 +43,32 @@ jobs:
             "Unit Test"
           )
 
+          API_URL="https://api.github.com/repos/${{ github.repository }}/commits/${{ inputs.version }}/check-runs"
+
+          RESPONSE=$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$API_URL")
+
           for CHECK in "${CHECKS[@]}"; do
             echo "Checking: $CHECK"
 
-            STATUS=$(gh api \
-              "/repos/${{ github.repository }}/commits/${{ inputs.version }}/check-runs" \
-              --jq ".check_runs[] | select(.name == \"$CHECK\") | .conclusion" \
-              | tail -n 1)
+            STATUS=$(echo "$RESPONSE" | jq -r \
+              --arg CHECK "$CHECK" \
+              '[.check_runs[] | select(.name == $CHECK) | .conclusion] | last // empty')
+
+            if [ -z "$STATUS" ]; then
+              echo "❌ $CHECK not found"
+              exit 1
+            fi
 
             if [ "$STATUS" != "success" ]; then
-              echo "❌ $CHECK failed or not found"
+              echo "❌ $CHECK failed. Status: $STATUS"
               exit 1
             fi
 
             echo "✅ $CHECK passed"
           done
 
-          echo "All required checks passed."
+          echo "✅ All required checks passed."
