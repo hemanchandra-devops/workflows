@@ -46,9 +46,19 @@ jobs:
           description: ${{ steps.npm_install.outcome == 'success' && 'success' || 'failure' }}
 
       - name: unit tests
+        id: unit_test
         run: echo "unit tests"
 
+      - name: Update Commit Status
+        if: always() && steps.unit_test.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'Unit Test'
+          state: ${{ steps.unit_test.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.unit_test.outcome == 'success' && 'success' || 'failure' }}
+
       - name: Check Dependabot Alerts
+        id: dependabot
         env:
           TOKEN: ${{ secrets.TOKEN }}
           API_URL: "https://api.github.com/repos/hemanchandra-devops/catalogue-ci/dependabot/alerts?state=open&per_page=100"
@@ -98,10 +108,28 @@ jobs:
             echo "Continuing pipeline..."
           fi
 
+      - name: Update Commit Status
+        if: always() && steps.dependabot.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'Dependabot Alerts'
+          state: ${{ steps.dependabot.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.dependabot.outcome == 'success' && 'success' || 'failure' }}
+
       - name: image build
+        id: image_build
         run: docker build -t ${ACCID}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:$APPVERSION .
 
+      - name: Update Commit Status
+        if: always() && steps.image_build.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'Dependabot Alerts'
+          state: ${{ steps.image_build.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.image_build.outcome == 'success' && 'success' || 'failure' }}
+
       - name: Trivy Scan
+        id: trivy_scan
         run: |
           IMAGE="${ACCID}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:${APPVERSION}"
 
@@ -115,6 +143,14 @@ jobs:
             --exit-code 1 \
             "$IMAGE"
 
+      - name: Update Commit Status
+        if: always() && steps.trivy_scan.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'Trivy Scan'
+          state: ${{ steps.trivy_scan.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.trivy_scan.outcome == 'success' && 'success' || 'failure' }}
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -123,6 +159,15 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       
       - name: push image
+        id: push_image
         run: |
           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${ACCID}.dkr.ecr.us-east-1.amazonaws.com
           docker push ${ACCID}.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.project }}/${{ inputs.component }}:$APPVERSION
+
+      - name: Update Commit Status
+        if: always() && steps.push_image.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'Push Image'
+          state: ${{ steps.push_image.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.push_image.outcome == 'success' && 'success' || 'failure' }}
