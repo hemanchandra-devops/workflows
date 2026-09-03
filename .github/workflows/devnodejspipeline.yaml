@@ -14,7 +14,7 @@ on:
 env:
   ACCID: "634758830486"
 jobs:
-  featurenodejspipeline:
+  devnodejspipeline:
     runs-on: self-hosted
     steps:
       - name: Checkout code
