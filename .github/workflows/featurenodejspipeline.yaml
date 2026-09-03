@@ -39,7 +39,7 @@ jobs:
 
       - name: Update Commit Status
         if: always() && steps.npm_install.outcome != 'skipped'
-        uses: ./.github/actions/set-commit-status
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status/action.yaml@main
         with:
           context: 'NPM Install'
           state: ${{ steps.npm_install.outcome == 'success' && 'success' || 'failure' }}
