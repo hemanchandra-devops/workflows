@@ -124,7 +124,7 @@ jobs:
         if: always() && steps.image_build.outcome != 'skipped'
         uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
         with:
-          context: 'Image Build'
+          context: 'Build Image'
           state: ${{ steps.image_build.outcome == 'success' && 'success' || 'failure' }}
           description: ${{ steps.image_build.outcome == 'success' && 'success' || 'failure' }}
 

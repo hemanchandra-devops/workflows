@@ -1,4 +1,4 @@
-name: non-prodnodejspipeline
+name: prodnodejspipeline
 on:
   workflow_call:
     inputs:
@@ -11,13 +11,10 @@ on:
       version:
         required: true
         type: string 
-      environment:
-        required: true
-        type: string
 env:
   ACCID: "634758830486"
 jobs:
-  non-prodnodejspipeline:
+  prodnodejspipeline:
     runs-on: self-hosted
     steps:
       - name: Set App Version
@@ -41,6 +38,7 @@ jobs:
             "Trivy Scan"
             "Unit Test"
             "DEV DEPLOY"
+            "UAT DEPLOY"
             "Build Image"
           )
 
@@ -130,6 +128,6 @@ jobs:
         if: always() && steps.deploy.outcome != 'skipped'
         uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
         with:
-          context: 'UAT DEPLOY'
+          context: 'PROD DEPLOY'
           state: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
           description: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
