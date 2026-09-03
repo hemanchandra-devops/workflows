@@ -40,7 +40,7 @@ jobs:
             "Push Image"
             "Trivy Scan"
             "Unit Test"
-            "Build Image"
+            "DEV DEPLOY"
           )
 
           SHA="${{ inputs.version }}"
