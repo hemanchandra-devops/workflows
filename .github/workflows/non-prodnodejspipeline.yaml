@@ -103,3 +103,32 @@ jobs:
 
           echo "✅ All required checks passed"
 
+            - name: Authenticate to EKS
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name ${{ inputs.project }}-${{ inputs.environment }}
+          kubectl get nodes
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          repository: hemanchandra-devops/catalogue-deploy
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Deploy to EKS
+        id: deploy
+        run: |
+          helm upgrade ${{ inputs.component }} . --install -f values.yaml -n ${{ inputs.project }} --atomic --timeout 15m --set deployment.version=$APPVERSION
+
+      - name: Update Commit Status
+        if: always() && steps.deploy.outcome != 'skipped'
+        uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
+        with:
+          context: 'UAT DEPLOY'
+          state: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
+          description: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
