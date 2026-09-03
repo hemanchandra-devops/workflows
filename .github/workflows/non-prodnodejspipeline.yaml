@@ -103,7 +103,7 @@ jobs:
 
           echo "✅ All required checks passed"
 
-            - name: Authenticate to EKS
+      - name: Authenticate to EKS
         run: |
           aws eks update-kubeconfig --region us-east-1 --name ${{ inputs.project }}-${{ inputs.environment }}
           kubectl get nodes
