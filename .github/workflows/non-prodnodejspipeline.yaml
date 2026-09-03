@@ -1,0 +1,59 @@
+name: non-prodnodejspipeline
+on:
+  workflow_call:
+    inputs:
+      project:
+        required: true
+        type: string
+      component:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string 
+      environment:
+        required: true
+        type: string
+env:
+  ACCID: "634758830486"
+jobs:
+  non-prodnodejspipeline:
+    runs-on: self-hosted
+    steps:
+      - name: Set App Version
+        run: |
+          APPVERSION="${{ inputs.version }}"
+          APPVERSION="${APPVERSION::7}"
+          echo "APPVERSION=$APPVERSION" >> "$GITHUB_ENV"
+          echo "App Version: $APPVERSION"
+      
+      - name: Check Required Checks
+        env:
+          GH_TOKEN: ${{ secrets.TOKEN }}v
+        run: |
+          CHECKS=(
+            "DEV DEPLOY"
+            "Dependabot Alerts"
+            "NPM Install"
+            "Push Image"
+            "Trivy Scan"
+            "Unit Test"
+          )
+
+          for CHECK in "${CHECKS[@]}"; do
+            echo "Checking: $CHECK"
+
+            STATUS=$(gh api \
+              "/repos/${{ github.repository }}/commits/${{ inputs.version }}/check-runs" \
+              --jq ".check_runs[] | select(.name == \"$CHECK\") | .conclusion" \
+              | tail -n 1)
+
+            if [ "$STATUS" != "success" ]; then
+              echo "❌ $CHECK failed or not found"
+              exit 1
+            fi
+
+            echo "✅ $CHECK passed"
+          done
+
+          echo "All required checks passed."
