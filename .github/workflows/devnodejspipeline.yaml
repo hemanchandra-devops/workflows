@@ -192,6 +192,6 @@ jobs:
         if: always() && steps.deploy.outcome != 'skipped'
         uses: hemanchandra-devops/workflows/.github/actions/set-commit-status@main
         with:
-          context: 'DEV DEPOY'
+          context: 'DEV DEPLOY'
           state: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
           description: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
