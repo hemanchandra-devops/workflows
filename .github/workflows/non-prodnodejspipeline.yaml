@@ -36,6 +36,7 @@ jobs:
 
           CHECKS=(
             "DEV DEPLOY"
+            "Build Image"
             "Dependabot Alerts"
             "NPM Install"
             "Push Image"
